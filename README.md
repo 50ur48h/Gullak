@@ -59,9 +59,9 @@ The House Bank is the PayPal sandbox **business** account. Each buddy's wallet i
 ### AI: the referee, the personality, and the designer (Meta Muse Spark)
 | What | How |
 |---|---|
-| **Video proof checking** | Telegram round videos are uploaded to Meta's Files API and passed to `muse-spark-1.3` together with the buddy's **reference photos**. The model returns structured JSON: `identityMatch`, `taskDone`, `challengeDone`, `looksLive`, `confidence`, what it observed, and what's missing. |
+| **Video proof checking** | Telegram round videos are sent to `muse-spark-1.3` (inline, or via Meta's Files API for large files) together with the buddy's **reference photos**. The model returns structured JSON: `identityMatch`, `taskDone`, `challengeDone`, `looksLive`, `confidence`, what it observed, and what's missing. |
 | **Decides the money** | ≥ 75% confidence pays automatically, 40–75% gets a targeted follow-up, and repeated doubt goes to the owner. Missing the gesture or the wrong buddy can never auto-pay. |
-| **Buddy designer** | `/newbuddy` + one photo + a caption ("Mochi, sassy cat, feed at 8 and 7, $1") → the model designs the character, chore, proof rules, reward, a **safe cooldown** (no overfeeding or overwatering) and a visual description used to recognise it later. |
+| **Buddy designer** | `/newbuddy` + one photo + a caption ("Mochi, sassy cat, feed at 8 and 7, $1") → the model designs the character, chore, proof rules, reward, a **safe cooldown** (no overfeeding or overwatering), **fixed meal times** if you mention them, and a visual description used to recognise it later. |
 | **Personality** | Bounties, verdicts, follow-ups and chat replies are written in character. Reply to a buddy's message to talk to it. |
 
 ### Anti-cheat
@@ -73,6 +73,13 @@ The House Bank is the PayPal sandbox **business** account. Each buddy's wallet i
 
 ### Welfare and safety rules
 Buddies only ask when they actually need something: each has a cooldown (e.g. a fern waters at most every 48–96h, a cat eats at most every 8–12h) and awake hours. If a bounty is ignored too long, the buddy raises the reward 50% (surge pricing 😤) instead of asking more often.
+
+### Fixed meal times 🍽
+Pets eat on a schedule, not at random. Mention feeding times in the `/newbuddy` caption (*"Mochi the cat, feed her at 8am, 1pm and 7pm, $1"*) and the AI stores them as meal times in your timezone (`TZ`).
+- **One bounty per meal**, posted at a random moment within **±15 min** of the meal time, so it can't be gamed by waiting for the exact minute.
+- **Never twice for the same meal**, even across restarts: the planned time and used meals are saved.
+- Meal buddies follow their schedule exactly: they ignore cooldown, awake hours and `DEMO_MODE`. If the last bounty is still open or the wallet is empty at mealtime, it keeps trying until the ±15 min window closes, then skips that meal rather than posting late.
+- **`/feednow name`** (owner) serves the next meal early, e.g. to film a demo, and that meal won't be posted again at its normal time.
 
 ---
 
@@ -94,7 +101,7 @@ In @BotFather, set **Bot Settings → Group Privacy → Turn off** so the bot ca
 
 Open **http://localhost:3000** for the live house-economy dashboard (buddy wallets + PayPal ledger with the AI's evidence for every payout).
 
-`DEMO_MODE=true` (default) makes buddies ask for help within minutes instead of hours. Set it to `false` for real life.
+`DEMO_MODE=true` (default) makes buddies ask for help within minutes instead of hours. Set it to `false` for real life. Buddies with fixed meal times always follow their schedule, demo mode or not (use `/feednow` to skip ahead).
 
 ### Deploy on Render
 The repo includes `render.yaml`. Create a new **Blueprint** from this repo on Render and paste the four secrets. Set `PUBLIC_URL` to your Render URL so PayPal redirects back to a "payment approved" page, and add `https://<your-app>.onrender.com/paypal/webhook` as a webhook in your PayPal app (events: *Checkout order approved*, *Payouts item* events).
@@ -111,6 +118,7 @@ The repo includes `render.yaml`. Create a new **Blueprint** from this repo on Re
 | `/addphoto name` | Add reference photos (better fake detection) |
 | `/topup name amount` | Fund a buddy's wallet with PayPal Checkout |
 | `/bounty name` | Owner: post a bounty now |
+| `/feednow name` | Owner: serve the next fixed meal early (that meal won't be posted again) |
 | `/buddies`, `/wallet` | Buddies, balances, moods |
 | `/leaderboard`, `/history`, `/me` | Who earned what |
 | `/pause name`, `/resume name` | Holiday mode |
@@ -139,7 +147,8 @@ src/
   game.js       bounties, claims, proof checking, payouts, top-ups
   ai.js         Meta Muse Spark calls (verify proof, design buddy, personality)
   paypal.js     PayPal OAuth, Payouts, Orders, webhook verification
-  scheduler.js  random bounty timing, claim expiry, surge pricing
+  scheduler.js  random bounty timing, meal-time bounties, claim expiry, surge pricing
+  meals.js      timezone-aware meal slots (±15 min, once per meal)
   server.js     dashboard + PayPal return/webhook routes
   db.js         tiny JSON-file database
 scripts/check.js  connection checker

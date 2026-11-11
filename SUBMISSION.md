@@ -12,6 +12,7 @@ Every shared home has the same fight: who watered the plant, who fed the cat. A 
 ## What it does
 - Each plant, pet or object becomes a **buddy** with a personality and its own PayPal-backed wallet.
 - At random (but welfare-safe) times, a buddy posts a bounty in the house Telegram group: *"$0.50 to whoever waters me."*
+- Pets can have **fixed meal times** (just say "feed her at 8am, 1pm and 7pm" when creating them). The buddy then posts exactly one feeding bounty per meal, at a random moment within ±15 min. Owners can serve a meal early with `/feednow`.
 - A housemate claims it, does the job, and sends a **round video message** while making a **random hand gesture**, so proof can't be pre-recorded.
 - **Meta's Muse Spark model watches the video**, compares it with the buddy's reference photos, and checks the job was done and the gesture is there. It then decides: pay, ask a follow-up in character, or escalate to the owner.
 - The buddy **pays the human through PayPal Payouts**. Owners refill buddy wallets through **PayPal Checkout**.
@@ -21,7 +22,7 @@ Every shared home has the same fight: who watered the plant, who fed the cat. A 
 - **PayPal Orders v2:** owners top up buddy wallets (create → approve → capture), idempotent across button, return URL and webhook.
 - **PayPal Payouts:** buddy → human rewards, with batch status tracking posted back into the chat. Failed payouts are refunded to the wallet with a one-tap retry.
 - **PayPal Webhooks:** `CHECKOUT.ORDER.APPROVED` and `PAYMENT.PAYOUTS-ITEM.*`, signature-verified.
-- **Meta Model API (Muse Spark 1.3):** video and image understanding with structured JSON verdicts (identity, task done, gesture, liveness, confidence). It also designs a buddy from one photo + caption (personality, chore, proof rules, reward, safe cooldown) and writes all dialogue in character.
+- **Meta Model API (Muse Spark 1.3):** video and image understanding with structured JSON verdicts (identity, task done, gesture, liveness, confidence). It also designs a buddy from one photo + caption (personality, chore, proof rules, reward, safe cooldown, and fixed meal times pulled from the caption) and writes all dialogue in character.
 - **Telegram Bot API (grammY), Node.js, Express**, hosted on **Render**.
 
 ## Anti-cheat
@@ -30,6 +31,7 @@ Random liveness gestures, live-only round videos, identity check against referen
 ## Challenges we ran into
 - Making AI judgment safe to attach real money to. We combined hard rules (no gesture = never auto-pay) with confidence thresholds and a human fallback.
 - Welfare: a bounty system must never reward overfeeding or overwatering. The AI sets a safe cooldown per buddy, and ignored bounties raise the price instead of asking more often.
+- Pets need routine, not randomness. Fixed meal times give exactly one bounty per meal in the household's timezone, with a ±15 min random offset, never repeated, even across restarts.
 
 ## What's next
 Smart-plug and sensor triggers, spoken code-word challenges via audio understanding, pooled household wallets, and pet-sitting for neighbors while you travel.
@@ -38,7 +40,7 @@ Smart-plug and sensor triggers, spoken code-word challenges via audio understand
 paypal-orders-api, paypal-payouts-api, paypal-webhooks, meta-muse-spark, telegram-bot-api, grammy, node.js, express, render
 
 ## Tools: which AI was used and how
-**Meta Model API, `muse-spark-1.3`**, used for: (1) video and photo proof verification with structured JSON output; (2) generating a buddy's character and safe care schedule from a photo; (3) in-character bounty posts, verdicts, follow-ups and chat. The AI's verdict directly decides whether a PayPal payout is sent.
+**Meta Model API, `muse-spark-1.3`**, used for: (1) video and photo proof verification with structured JSON output; (2) generating a buddy's character and safe care schedule (cooldown or fixed meal times) from a photo and caption; (3) in-character bounty posts, verdicts, follow-ups and chat. The AI's verdict directly decides whether a PayPal payout is sent.
 
 ---
 
@@ -55,6 +57,8 @@ paypal-orders-api, paypal-payouts-api, paypal-webhooks, meta-muse-spark, telegra
 | 2:05–2:20 | Sandbox PayPal account showing the $0.50 | "Real PayPal money movement, end to end." |
 | 2:20–2:45 | Dashboard: wallets, leaderboard, ledger with AI evidence | "Every payout is tied to the AI's evidence." |
 | 2:45–3:00 | Logo + "Try it: t.me/PaypalAIGullakbot → /demo" | "Gullak. Your plants pay you now." |
+
+**Optional pet cut (swap in for 0:55–1:15 if filming with a pet):** `/newbuddy` with *"Mochi the cat, feed her at 8am, 1pm and 7pm"* → card shows "🍽 Meals at 08:00, 13:00, 19:00" → `/feednow Mochi` → Mochi posts her mealtime bounty. Voiceover: *"Pets don't eat at random. Mochi asks once per meal, right on schedule."*
 
 Upload to YouTube as **Public**, without copyrighted music.
 
