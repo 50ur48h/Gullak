@@ -22,6 +22,7 @@ Tap <b>🙋 I’ll do it!</b> on a bounty, do the job, then send a <b>round vide
 /buddies · list buddies here
 /topup <i>name amount</i> · add money to a buddy’s wallet with PayPal
 /bounty <i>name</i> · (owner) post a bounty right now
+/feednow <i>name</i> · (owner) serve the next fixed meal early
 /pause <i>name</i> · /resume <i>name</i>
 
 <b>House</b>
@@ -131,8 +132,13 @@ export function createBot() {
     const lines = list.map((b) => {
       const open = openBountyFor(b.id);
       const cd = game.cooldownLeftMs(b);
-      const state = b.paused ? '⏸ paused' : open ? `🔔 bounty ${open.status}` : cd > 0 ? `😴 content for ${Math.ceil(cd / 60000)} min` : '👀 might ask for help soon';
-      return `${b.emoji} <b>${esc(b.name)}</b> (${esc(b.kind)})\n   Gullak: <b>${money(b.walletCents)}</b> · pays ${money(b.rewardCents)} to “${esc(b.task)}” · ${state}`;
+      let state;
+      if (b.paused) state = '⏸ paused';
+      else if (open) state = `🔔 bounty ${open.status}`;
+      else if (game.hasMeals(b)) state = `🍽 next meal ~${game.nextMeal(b)?.time || '?'}`;
+      else state = cd > 0 ? `😴 content for ${Math.ceil(cd / 60000)} min` : '👀 might ask for help soon';
+      const mealsLine = game.hasMeals(b) ? `\n   Meals: ${b.mealTimes.join(', ')} (±15 min)` : '';
+      return `${b.emoji} <b>${esc(b.name)}</b> (${esc(b.kind)})\n   Gullak: <b>${money(b.walletCents)}</b> · pays ${money(b.rewardCents)} to “${esc(b.task)}” · ${state}${mealsLine}`;
     });
     await ctx.reply(lines.join('\n\n'), HTML);
   });
@@ -148,6 +154,16 @@ export function createBot() {
     if (buddy.ownerId !== ctx.user.id && !buddy.demo) return ctx.reply(`Only ${esc(buddy.name)}’s owner can summon a bounty.`, HTML);
     const r = await game.postBounty(buddy, { force: true });
     if (r === 'already-open') await ctx.reply(`${esc(buddy.name)} already has an open bounty.`, HTML);
+  });
+
+  bot.command('feednow', async (ctx) => {
+    const buddy = findBuddy(ctx.chat.id, ctx.match.trim());
+    if (!buddy) return ctx.reply('Which buddy? <code>/feednow name</code>', HTML);
+    if (buddy.ownerId !== ctx.user.id) return ctx.reply(`Only ${esc(buddy.name)}’s owner can serve a meal early.`, HTML);
+    if (!game.hasMeals(buddy)) return ctx.reply(`${esc(buddy.name)} has no fixed meal times. Use /bounty ${esc(buddy.name)} instead.`, HTML);
+    const { result } = await game.feedNow(buddy);
+    if (result === 'already-open') return ctx.reply(`${esc(buddy.name)} already has an open bounty.`, HTML);
+    // On success the bounty itself is the reply; 'broke' already posted a top-up notice.
   });
 
   for (const [cmd, paused] of [['pause', true], ['resume', false]]) {
@@ -355,7 +371,9 @@ export function createBot() {
           `🎭 ${esc(design.personality)}\n` +
           `🧹 Chore: ${esc(design.task)} · pays <b>${money(design.rewardCents)}</b>\n` +
           `📸 Proof: ${esc(design.proof)}\n` +
-          `⏳ At most once every ${design.cooldownHours}h, between ${design.awakeStart}:00 and ${design.awakeEnd}:00\n` +
+          (design.mealTimes?.length
+            ? `🍽 Meals at ${design.mealTimes.join(', ')} (${esc(config.timezone)}), each posted at a random moment within ±15 min\n`
+            : `⏳ At most once every ${design.cooldownHours}h, between ${design.awakeStart}:00 and ${design.awakeEnd}:00\n`) +
           `👀 Recognised by: ${esc(design.appearance)}`,
         { ...HTML, reply_markup: kb },
       );

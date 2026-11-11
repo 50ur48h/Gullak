@@ -6,6 +6,7 @@ import { db, save, newId, addTransaction, openBountyFor, money } from './db.js';
 import * as paypal from './paypal.js';
 import * as ai from './ai.js';
 import { randomChallenge, challengeById } from './challenges.js';
+import * as meals from './meals.js';
 
 let api = null; // grammY Api instance, set at startup
 let botUsername = 'GullakBot';
@@ -49,6 +50,7 @@ export function createBuddy({ chatId, ownerId, design, refPhotoIds = [], walletC
     cooldownHours: design.cooldownHours,
     awakeStart: design.awakeStart,
     awakeEnd: design.awakeEnd,
+    mealTimes: meals.normalizeMealTimes(design.mealTimes),
     appearance: design.appearance,
     refPhotoIds,
     walletCents,
@@ -78,6 +80,39 @@ export function isAwake(buddy, date = new Date()) {
   return hour >= buddy.awakeStart && hour < buddy.awakeEnd;
 }
 
+// ------------------------------------------------------------------ meal times
+
+export const hasMeals = (buddy) => Array.isArray(buddy.mealTimes) && buddy.mealTimes.length > 0;
+
+/** The buddy's next meal plan ({ key, time, nominalAt, fireAt }), persisting a newly chosen random fire time. */
+export function nextMeal(buddy, now = Date.now()) {
+  const r = meals.nextMealPlan(buddy, now, config.timezone);
+  if (!r) return null;
+  if (r.changed) {
+    buddy.mealPlan = r.plan;
+    save();
+  }
+  return r.plan;
+}
+
+/**
+ * Scheduler hook for buddies with fixed meal times. Posts one bounty per slot once its random moment arrives.
+ * Ignores cooldown, awake hours and DEMO_MODE. If it can't post (bounty still open, wallet empty)
+ * it retries each tick until the slot's window closes, then the slot is skipped.
+ */
+export async function tickMeals(buddy, now = Date.now()) {
+  const plan = nextMeal(buddy, now);
+  if (!plan || now < plan.fireAt) return null;
+  return postBounty(buddy, { mealSlot: plan });
+}
+
+/** /feednow: post the next meal's bounty right away. That slot is then used up. */
+export async function feedNow(buddy) {
+  const plan = nextMeal(buddy);
+  if (!plan) return { result: 'no-meals' };
+  return { result: await postBounty(buddy, { force: true, mealSlot: plan }), plan };
+}
+
 // ------------------------------------------------------------------ bounties
 
 function bountyKeyboard(bounty) {
@@ -92,10 +127,14 @@ function rulesLine(bounty, challenge) {
   );
 }
 
-/** Post a new bounty for a buddy. Returns the bounty, or a reason string if it couldn't. */
-export async function postBounty(buddy, { force = false } = {}) {
+/**
+ * Post a new bounty for a buddy. Returns the bounty, or a reason string if it couldn't.
+ * force: a human asked for it (skip cooldown, always show the broke notice).
+ * mealSlot: a planned meal ({ key, time }); skips cooldown and marks the slot used.
+ */
+export async function postBounty(buddy, { force = false, mealSlot = null } = {}) {
   if (openBountyFor(buddy.id)) return 'already-open';
-  if (!force && cooldownLeftMs(buddy) > 0) return 'cooldown';
+  if (!force && !mealSlot && cooldownLeftMs(buddy) > 0) return 'cooldown';
   if (buddy.walletCents < buddy.rewardCents) {
     await brokeNotice(buddy, force);
     return 'broke';
@@ -116,9 +155,18 @@ export async function postBounty(buddy, { force = false } = {}) {
     proofs: [],
     bumped: false,
   };
+  if (mealSlot) {
+    bounty.mealSlot = mealSlot.key;
+    meals.markSlotDone(buddy, mealSlot.key); // before any await, so the slot can't fire twice
+  }
   db().bounties[bounty.id] = bounty;
   save();
-  const text = await ai.bountyMessage(buddy, { rewardCents: bounty.rewardCents, challenge, hoursSinceLast: hoursSince(buddy.lastDoneAt) });
+  const text = await ai.bountyMessage(buddy, {
+    rewardCents: bounty.rewardCents,
+    challenge,
+    hoursSinceLast: hoursSince(buddy.lastDoneAt),
+    mealTime: mealSlot?.time,
+  });
   const msg = await api.sendMessage(buddy.chatId, say(buddy, text) + rulesLine(bounty, challenge), { ...HTML, reply_markup: bountyKeyboard(bounty) });
   bounty.messageId = msg.message_id;
   rememberMessage(msg.message_id, buddy.chatId, buddy.id);

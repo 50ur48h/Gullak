@@ -1,6 +1,7 @@
 // All AI calls go to Meta's Model API (Muse Spark), using the OpenAI-compatible Responses API.
 import OpenAI, { toFile } from 'openai';
 import { config } from './config.js';
+import { normalizeMealTimes } from './meals.js';
 
 const client = new OpenAI({ apiKey: config.meta.apiKey || 'missing', baseURL: config.meta.baseURL });
 
@@ -88,6 +89,11 @@ const buddySchema = {
     cooldownHours: { type: 'number', description: 'Minimum hours between chores so it is never over-fed or over-watered' },
     awakeStart: { type: 'integer', description: 'Hour of day (0-23) bounties may start' },
     awakeEnd: { type: 'integer', description: 'Hour of day (1-24) bounties stop' },
+    mealTimes: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Fixed feeding times the user explicitly mentioned, as 24h "HH:MM" (e.g. ["08:00","19:00"]). Empty array if none were mentioned. Never invent times.',
+    },
     appearance: { type: 'string', description: 'Distinctive visual details to recognise this exact buddy later' },
   },
   required: ['name', 'kind', 'emoji', 'personality', 'task', 'proof', 'rewardCents', 'cooldownHours', 'awakeStart', 'awakeEnd', 'appearance'],
@@ -101,6 +107,8 @@ export async function designBuddy({ photo, caption }) {
         `A user wants to give this plant/pet/object a Gullak wallet. Their description: "${caption || '(none)'}".\n` +
         'Design the buddy. Pick a SAFE cooldown for living things (plants: usually 48-96h for watering; ' +
         'pets: feeding at most every 8-12h; play/walks 3-6h). Respect any numbers the user gave. ' +
+        'If the user names specific feeding/meal times (e.g. "feed her at 8am and 7pm", "meals 8, 1 and 7pm"), ' +
+        'put them in mealTimes as 24h HH:MM and make the task about feeding; otherwise mealTimes must be []. ' +
         'Describe its appearance precisely (colour, pot, markings, shape) so it can be recognised in later photos.',
     },
   ];
@@ -115,12 +123,16 @@ export async function designBuddy({ photo, caption }) {
   b.cooldownHours = Math.max(0.5, Number(b.cooldownHours) || 24);
   b.awakeStart = Math.min(23, Math.max(0, Number(b.awakeStart) || 8));
   b.awakeEnd = Math.min(24, Math.max(b.awakeStart + 1, Number(b.awakeEnd) || 22));
+  b.mealTimes = normalizeMealTimes(b.mealTimes);
   return b;
 }
 
 // ---------------------------------------------------------------- bounty text
 
-export async function bountyMessage(buddy, { rewardCents, challenge, hoursSinceLast }) {
+export async function bountyMessage(buddy, { rewardCents, challenge, hoursSinceLast, mealTime }) {
+  const timing = mealTime
+    ? `It's your ${mealTime} mealtime and your tummy runs on a strict schedule. `
+    : `It has been ${hoursSinceLast == null ? 'a long time' : `${hoursSinceLast.toFixed(1)} hours`} since someone did it. `;
   try {
     const out = await askJson({
       system: personaLine(buddy),
@@ -129,7 +141,7 @@ export async function bountyMessage(buddy, { rewardCents, challenge, hoursSinceL
           type: 'input_text',
           text:
             `Post a bounty in the house group chat. You need: "${buddy.task}". ` +
-            `It has been ${hoursSinceLast == null ? 'a long time' : `${hoursSinceLast.toFixed(1)} hours`} since someone did it. ` +
+            timing +
             `Reward: $${(rewardCents / 100).toFixed(2)}. Don't explain the rules, the bot adds them.`,
         },
       ],

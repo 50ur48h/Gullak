@@ -22,6 +22,7 @@ await bot.api.setMyCommands([
   { command: 'newbuddy', description: 'Create a buddy from a photo' },
   { command: 'buddies', description: 'List buddies and their wallets' },
   { command: 'topup', description: 'Add money to a buddy via PayPal' },
+  { command: 'feednow', description: 'Owner: serve the next fixed meal early' },
   { command: 'leaderboard', description: 'Who earned the most' },
   { command: 'history', description: 'Recent payments' },
   { command: 'me', description: 'Your earnings' },

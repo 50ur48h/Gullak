@@ -12,7 +12,14 @@ export async function tick() {
     await game.expireClaims();
     await game.surgeStaleBounties();
     for (const buddy of Object.values(db().buddies)) {
-      if (buddy.paused || openBountyFor(buddy.id)) continue;
+      if (buddy.paused) continue;
+      if (game.hasMeals(buddy)) {
+        // Fixed meal times: one bounty per slot at a random moment within ±15 min.
+        // Ignores cooldown, awake hours and DEMO_MODE.
+        await game.tickMeals(buddy).catch((err) => console.error('[scheduler] meal bounty failed:', err.message));
+        continue;
+      }
+      if (openBountyFor(buddy.id)) continue;
       if (!game.isAwake(buddy)) continue;
       if (game.cooldownLeftMs(buddy) > 0) continue;
       // Random timing: on average a buddy asks ~2 min (demo) or ~45 min (normal) after it becomes "needy".
