@@ -1,0 +1,20 @@
+{
+  "name": "gullak",
+  "version": "1.0.0",
+  "description": "Gullak: your plants, pets and things get a PayPal wallet and an AI personality, and pay humans to look after them (Telegram + PayPal + Meta Muse AI).",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "check": "node scripts/check.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0",
+    "grammy": "^1.36.0",
+    "openai": "^6.0.0"
+  }
+}

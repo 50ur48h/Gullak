@@ -1,0 +1,11 @@
+# secrets: never commit these
+.env
+.env.*
+!.env.example
+
+# runtime data
+data/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
