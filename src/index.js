@@ -4,6 +4,7 @@ import { createBot } from './bot.js';
 import { createServer } from './server.js';
 import { startScheduler } from './scheduler.js';
 import { attachApi, resumePendingPayouts } from './game.js';
+import { checkModel } from './ai.js';
 
 const missing = missingConfig();
 if (missing.length) {
@@ -12,6 +13,7 @@ if (missing.length) {
 }
 
 load();
+await checkModel();
 const bot = createBot();
 const me = await bot.api.getMe();
 attachApi(bot.api, me.username);

@@ -5,6 +5,27 @@ import { normalizeMealTimes } from './meals.js';
 
 const client = new OpenAI({ apiKey: config.meta.apiKey || 'missing', baseURL: config.meta.baseURL });
 
+/**
+ * Startup check: make sure the configured model is one this API key can use.
+ * If it isn't but the default is, switch to the default so a mistyped META_MODEL doesn't break the bot.
+ */
+export async function checkModel() {
+  const fallback = 'muse-spark-1.3';
+  let ids;
+  try {
+    ids = (await client.models.list()).data.map((m) => m.id);
+  } catch (e) {
+    console.warn(`⚠️ Could not list Meta models (${e.status || ''} ${e.message}). Check META_API_KEY / META_BASE_URL.`);
+    return;
+  }
+  if (ids.includes(config.meta.model)) return;
+  console.warn(`⚠️ Model "${config.meta.model}" is not available to this META_API_KEY. Available: ${ids.join(', ') || '(none)'}`);
+  if (config.meta.model !== fallback && ids.includes(fallback)) {
+    console.warn(`   Falling back to ${fallback}. Remove or fix the META_MODEL variable to silence this.`);
+    config.meta.model = fallback;
+  }
+}
+
 const dataUrl = (buffer, mime) => `data:${mime};base64,${buffer.toString('base64')}`;
 
 // Muse Spark is a reasoning model: reasoning tokens count against max_output_tokens,
