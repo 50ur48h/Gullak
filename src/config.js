@@ -24,7 +24,9 @@ loadEnvFile(path.resolve(process.cwd(), '.env'));
 function pick(...names) {
   for (const n of names) {
     const v = process.env[n];
-    if (v !== undefined && String(v).trim() !== '') return String(v).trim();
+    // Trim spaces and stray surrounding quotes (easy to paste into hosting dashboards by accident).
+    const clean = v === undefined ? '' : String(v).trim().replace(/^(['"])(.*)\1$/, '$2').trim();
+    if (clean !== '') return clean;
   }
   return '';
 }
