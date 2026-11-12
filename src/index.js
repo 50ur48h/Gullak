@@ -4,7 +4,7 @@ import { createBot } from './bot.js';
 import { createServer } from './server.js';
 import { startScheduler } from './scheduler.js';
 import { attachApi, resumePendingPayouts } from './game.js';
-import { checkModel } from './ai.js';
+import { checkModel, aiLabel } from './ai.js';
 
 const missing = missingConfig();
 if (missing.length) {
@@ -47,5 +47,5 @@ const shutdown = () => {
 process.once('SIGINT', shutdown);
 process.once('SIGTERM', shutdown);
 
-console.log(`🐷 Gullak is running as @${me.username} (PayPal: ${config.paypal.env}, AI: ${config.meta.model}, demo mode: ${config.demoMode})`);
+console.log(`🐷 Gullak is running as @${me.username} (PayPal: ${config.paypal.env}, AI: ${aiLabel()}, demo mode: ${config.demoMode})`);
 bot.start({ drop_pending_updates: true, allowed_updates: ['message', 'callback_query'] });

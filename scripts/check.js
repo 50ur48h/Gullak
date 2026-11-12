@@ -8,7 +8,7 @@ let ok = missing.length === 0;
 if (missing.length) console.log(`❌ Missing in .env: ${missing.join(', ')}\n`);
 
 const step = async (label, fn) => {
-  const needs = { Telegram: 'TELEGRAM_BOT_TOKEN', PayPal: 'PAYPAL_CLIENT_ID', Meta: 'META_API_KEY' };
+  const needs = { Telegram: 'TELEGRAM_BOT_TOKEN', PayPal: 'PAYPAL_CLIENT_ID', AI: 'META_API_KEY' };
   const key = Object.keys(needs).find((k) => label.startsWith(k));
   if (key && missing.some((m) => m.startsWith(needs[key].split('_')[0]))) {
     console.log(`⏭️  ${label}: skipped (key missing)`);
@@ -33,7 +33,8 @@ await step(`PayPal ${config.paypal.env} credentials`, async () => {
   await paypal.ping();
   return 'token received';
 });
-await step(`Meta Model API (${config.meta.model})`, async () => `replied "${(await ai.ping()).trim().slice(0, 30)}"`);
+await ai.checkModel();
+await step(`AI: ${ai.aiLabel()}`, async () => `replied "${(await ai.ping()).trim().slice(0, 30)}"`);
 
 console.log(ok ? '\nAll good! Run: npm start' : '\nFix the ❌ items above, then run npm run check again.');
 process.exit(ok ? 0 : 1);

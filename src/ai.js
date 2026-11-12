@@ -1,51 +1,98 @@
-// All AI calls go to Meta's Model API (Muse Spark), using the OpenAI-compatible Responses API.
+// AI calls go to Meta's Model API (Muse Spark) via the OpenAI-compatible Responses API.
+// Google Gemini (src/gemini.js) is the backup when Meta isn't reachable from where the bot runs.
 import OpenAI, { toFile } from 'openai';
 import { config } from './config.js';
 import { normalizeMealTimes } from './meals.js';
+import * as gemini from './gemini.js';
 
 const client = new OpenAI({ apiKey: config.meta.apiKey || 'missing', baseURL: config.meta.baseURL });
 
+// Which provider answers. AI_PROVIDER=meta|gemini|auto (default auto: Meta first, Gemini as backup).
+const hasGemini = () => Boolean(config.gemini.apiKey);
+let metaUsable = Boolean(config.meta.apiKey);
+const useMeta = () => config.aiProvider !== 'gemini' && metaUsable;
+
+/** Human-readable name of the model currently answering, for logs and /status. */
+export function aiLabel() {
+  if (useMeta()) return `Meta ${config.meta.model}${hasGemini() ? ` (backup: Gemini ${config.gemini.model})` : ''}`;
+  return `Gemini ${config.gemini.model}`;
+}
+
 /**
- * Startup check: make sure the configured model is one this API key can use.
- * If it isn't but the default is, switch to the default so a mistyped META_MODEL doesn't break the bot.
+ * Startup check. Meta: make sure the configured model is one this key can use from here
+ * (Meta has returned an empty model list from some hosting regions). Gemini: pick a usable model.
  */
 export async function checkModel() {
-  const fallback = 'muse-spark-1.3';
+  if (hasGemini()) {
+    try {
+      config.gemini.model = await gemini.pickModel();
+    } catch (e) {
+      console.warn(`⚠️ Gemini unavailable (${e.message}). Check GEMINI_API_KEY.`);
+      config.gemini.apiKey = '';
+    }
+  }
+  if (!config.meta.apiKey || config.aiProvider === 'gemini') {
+    metaUsable = false;
+    return;
+  }
   let ids;
   try {
     ids = (await client.models.list()).data.map((m) => m.id);
   } catch (e) {
     console.warn(`⚠️ Could not list Meta models (${e.status || ''} ${e.message}). Check META_API_KEY / META_BASE_URL.`);
+    if (hasGemini() && config.aiProvider !== 'meta') metaUsable = false;
     return;
   }
   if (ids.includes(config.meta.model)) return;
   console.warn(`⚠️ Model "${config.meta.model}" is not available to this META_API_KEY. Available: ${ids.join(', ') || '(none)'}`);
-  if (config.meta.model !== fallback && ids.includes(fallback)) {
-    console.warn(`   Falling back to ${fallback}. Remove or fix the META_MODEL variable to silence this.`);
+  const fallback = FALLBACK_MODELS.find((m) => ids.includes(m));
+  if (fallback) {
+    console.warn(`   Falling back to ${fallback}.`);
     config.meta.model = fallback;
+  } else if (hasGemini() && config.aiProvider !== 'meta') {
+    console.warn('   No Muse Spark model available from this server; using Gemini.');
+    metaUsable = false;
   }
 }
 
-// Meta sometimes answers 404 model_not_found for a model it lists (seen intermittently from Railway's servers).
-// Retry once, then fall back to the other Muse Spark versions this key can use.
+// Meta sometimes answers 404 model_not_found for a model it lists. Retry, then try the other
+// Muse Spark versions, then (if configured) Gemini.
 const FALLBACK_MODELS = ['muse-spark-1.3', 'muse-spark-1.2', 'muse-spark-1.1'];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function respond(params) {
+
+async function metaRespond(params) {
   const models = [config.meta.model, ...FALLBACK_MODELS.filter((m) => m !== config.meta.model)];
+  const attempts = hasGemini() ? 1 : 2; // with a backup available, don't make the user wait on retries
   let lastErr;
   for (const model of models) {
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
         return await client.responses.create({ ...params, model });
       } catch (err) {
         if (err.status !== 404 || (err.code && err.code !== 'model_not_found')) throw err;
         lastErr = err;
-        console.warn(`[ai] ${model}: 404 model_not_found (attempt ${attempt}), retrying`);
-        await sleep(1000 * attempt);
+        console.warn(`[ai] ${model}: 404 model_not_found (attempt ${attempt})`);
+        if (attempts > 1) await sleep(1000 * attempt);
       }
     }
   }
   throw lastErr;
+}
+
+async function respond(params) {
+  if (!useMeta()) {
+    if (!hasGemini()) throw new Error('No AI provider available (Meta has no usable model here and GEMINI_API_KEY is not set)');
+    return gemini.respond(params);
+  }
+  try {
+    return await metaRespond(params);
+  } catch (err) {
+    // 400s are request-shape problems (askJson handles those); everything else can go to the backup.
+    const canFallBack = hasGemini() && config.aiProvider !== 'meta' && err.status !== 400;
+    if (!canFallBack) throw err;
+    console.warn(`[ai] Meta failed (${err.status || ''} ${err.message.slice(0, 80)}); using Gemini`);
+    return gemini.respond(params);
+  }
 }
 
 const dataUrl = (buffer, mime) => `data:${mime};base64,${buffer.toString('base64')}`;
@@ -221,7 +268,7 @@ async function mediaPart(media) {
   if (media.kind === 'image') return { part: { type: 'input_image', image_url: dataUrl(media.buffer, media.mime || 'image/jpeg') } };
   // Video: small clips (Telegram round videos are a few MB) go inline, which skips an upload round trip.
   // Bigger files go through the Files API. Both formats were verified against the live API.
-  if (media.buffer.length <= INLINE_VIDEO_MAX) {
+  if (media.buffer.length <= INLINE_VIDEO_MAX || !useMeta()) {
     return { part: { type: 'input_video', video_url: dataUrl(media.buffer, 'video/mp4') } };
   }
   try {

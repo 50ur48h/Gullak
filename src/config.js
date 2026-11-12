@@ -46,6 +46,12 @@ export const config = {
     baseURL: pick('META_BASE_URL') || 'https://api.meta.ai/v1',
     model: pick('META_MODEL') || 'muse-spark-1.3',
   },
+  // Backup AI provider. If the model fails (busy/retired/quota), newer flash models are tried automatically.
+  gemini: {
+    apiKey: pick('GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_GENERATIVE_AI_API_KEY', 'GEMINI_KEY'),
+    model: pick('GEMINI_MODEL') || 'gemini-3.5-flash', // fast + reliable as of Nov 2026; newer flash models are fallbacks
+  },
+  aiProvider: (pick('AI_PROVIDER') || 'auto').toLowerCase(), // auto | meta | gemini
   publicUrl: pick('PUBLIC_URL', 'RENDER_EXTERNAL_URL').replace(/\/$/, ''),
   timezone: pick('TZ', 'TIMEZONE') || 'Asia/Singapore',
   demoMode: bool(pick('DEMO_MODE'), true),
@@ -66,6 +72,6 @@ export function missingConfig() {
   if (!config.telegramToken) missing.push('TELEGRAM_BOT_TOKEN');
   if (!config.paypal.clientId) missing.push('PAYPAL_CLIENT_ID');
   if (!config.paypal.clientSecret) missing.push('PAYPAL_CLIENT_SECRET');
-  if (!config.meta.apiKey) missing.push('META_API_KEY');
+  if (!config.meta.apiKey && !config.gemini.apiKey) missing.push('META_API_KEY (or GEMINI_API_KEY)');
   return missing;
 }

@@ -251,9 +251,9 @@ export function createBot() {
     }
     try {
       const r = await ai.ping();
-      lines.push(`✅ Meta AI (${esc(config.meta.model)}) replied: ${esc(r.slice(0, 40))}`);
+      lines.push(`✅ AI (${esc(ai.aiLabel())}) replied: ${esc(r.slice(0, 40))}`);
     } catch (e) {
-      lines.push(`❌ Meta AI: ${esc(e.message.slice(0, 200))}`);
+      lines.push(`❌ AI (${esc(ai.aiLabel())}): ${esc(e.message.slice(0, 200))}`);
     }
     lines.push(`Demo mode: ${config.demoMode ? 'on (fast bounties)' : 'off'}`);
     await ctx.reply(lines.join('\n'), HTML);
