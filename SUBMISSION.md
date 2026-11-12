@@ -23,7 +23,8 @@ Every shared home has the same fight: who watered the plant, who fed the cat. A 
 - **PayPal Payouts:** buddy → human rewards, with batch status tracking posted back into the chat. Failed payouts are refunded to the wallet with a one-tap retry.
 - **PayPal Webhooks:** `CHECKOUT.ORDER.APPROVED` and `PAYMENT.PAYOUTS-ITEM.*`, signature-verified.
 - **Meta Model API (Muse Spark 1.3):** video and image understanding with structured JSON verdicts (identity, task done, gesture, liveness, confidence). It also designs a buddy from one photo + caption (personality, chore, proof rules, reward, safe cooldown, and fixed meal times pulled from the caption) and writes all dialogue in character.
-- **Telegram Bot API (grammY), Node.js, Express**, hosted on **Render**.
+- **Google Gemini API (backup):** if Muse Spark isn't reachable from where the bot runs, the same requests go to Gemini (`gemini-3.5-flash`, with newer Flash models as fallbacks). The hosted Railway bot runs on Gemini, because Meta's API returns no models for our key from Railway's servers.
+- **Telegram Bot API (grammY), Node.js, Express**, hosted on **Railway**.
 
 ## Anti-cheat
 Random liveness gestures, live-only round videos, identity check against reference photos, duplicate detection (file ID + SHA-256), 15-minute claim locks, confidence thresholds, and owner review as the final word.
@@ -37,10 +38,12 @@ Random liveness gestures, live-only round videos, identity check against referen
 Smart-plug and sensor triggers, spoken code-word challenges via audio understanding, pooled household wallets, and pet-sitting for neighbors while you travel.
 
 ## Built with
-paypal-orders-api, paypal-payouts-api, paypal-webhooks, meta-muse-spark, telegram-bot-api, grammy, node.js, express, render
+paypal-orders-api, paypal-payouts-api, paypal-webhooks, meta-muse-spark, google-gemini, telegram-bot-api, grammy, node.js, express, railway
 
 ## Tools: which AI was used and how
 **Meta Model API, `muse-spark-1.3`**, used for: (1) video and photo proof verification with structured JSON output; (2) generating a buddy's character and safe care schedule (cooldown or fixed meal times) from a photo and caption; (3) in-character bounty posts, verdicts, follow-ups and chat. The AI's verdict directly decides whether a PayPal payout is sent.
+
+**Google Gemini API (backup), `gemini-3.5-flash`** with newer Flash models as fallbacks. It does the same three jobs with the same prompts and the same pay/follow-up/owner-review policy, and takes over automatically when Muse Spark isn't available. The hosted Railway bot runs on it, because Meta's API returns no models for our key from Railway's servers.
 
 ---
 
@@ -65,6 +68,6 @@ Upload to YouTube as **Public**, without copyrighted music.
 ## Submission checklist
 - [ ] Repo public, MIT LICENSE visible
 - [ ] README has run instructions (done) and the bot link
-- [ ] Hosted on Render, `/demo` works for a stranger
+- [x] Hosted on Railway, `/demo` works for a stranger
 - [ ] YouTube video < 3 min, public
 - [ ] Devpost form: description, tools section, repo URL, video URL, try-it link

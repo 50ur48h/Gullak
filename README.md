@@ -1,6 +1,6 @@
 # 🐷 Gullak: your plants and pets pay you to look after them
 
-![License: MIT](https://img.shields.io/badge/license-MIT-green) ![PayPal: Payouts + Orders v2 + Webhooks](https://img.shields.io/badge/PayPal-Payouts%20%7C%20Orders%20v2%20%7C%20Webhooks-003087) ![AI: Meta Muse Spark 1.3](https://img.shields.io/badge/AI-Meta%20Muse%20Spark%201.3-0866FF) ![Telegram bot](https://img.shields.io/badge/Telegram-bot-26A5E4) ![Hosted on Railway](https://img.shields.io/badge/hosted-Railway-7B3FE4) ![Node 20+](https://img.shields.io/badge/node-%E2%89%A520-339933)
+![License: MIT](https://img.shields.io/badge/license-MIT-green) ![PayPal: Payouts + Orders v2 + Webhooks](https://img.shields.io/badge/PayPal-Payouts%20%7C%20Orders%20v2%20%7C%20Webhooks-003087) ![AI: Meta Muse Spark 1.3](https://img.shields.io/badge/AI-Meta%20Muse%20Spark%201.3-0866FF) ![Backup AI: Google Gemini](https://img.shields.io/badge/backup%20AI-Google%20Gemini-4285F4) ![Telegram bot](https://img.shields.io/badge/Telegram-bot-26A5E4) ![Hosted on Railway](https://img.shields.io/badge/hosted-Railway-7B3FE4) ![Node 20+](https://img.shields.io/badge/node-%E2%89%A520-339933)
 
 > *Gullak* (गुल्लक) is the clay piggy bank every kid in India grew up with.
 > Gullak gives every plant, pet and object in your home its own piggy bank (a PayPal-backed wallet) and an AI personality. It then **pays the humans who look after it**, but only after AI has **watched video proof** that the job was really done.
@@ -8,8 +8,8 @@
 | | |
 |---|---|
 | 🤖 **Try the bot** | **[t.me/PaypalAIGullakbot](https://t.me/PaypalAIGullakbot)** → send `/demo` (60-second walkthrough [below](#-try-it-in-60-seconds)) |
-| 📊 **Live dashboard** | **LIVE_URL** (wallets + PayPal ledger with the AI's evidence for every payout) |
-| 🎬 **Demo video** | **VIDEO_URL** (under 3 min) |
+| 📊 **Live dashboard** | **[gullak-production.up.railway.app](https://gullak-production.up.railway.app/)** (wallets + PayPal ledger with the AI's evidence for every payout) |
+| 🎬 **Demo video** | **[youtube.com/watch?v=6DsYvHDKtZc](https://www.youtube.com/watch?v=6DsYvHDKtZc)** (under 3 min: a real cat, real PayPal sandbox payouts) |
 | 📦 **Run it yourself** | [Setup instructions](#-run-it-yourself) (Node 20, 4 env vars, `npm start`) |
 
 ---
@@ -39,6 +39,18 @@ Neither half works alone:
 
 ---
 
+## 👥 Who it's for
+
+| Who | The everyday problem | What Gullak changes |
+|---|---|---|
+| **Couples and roommates** | "Did anyone feed the cat?" Shared pets and plants get forgotten or double-fed, and chores turn into arguments. | The cat asks for food at mealtime, one person claims it, and the video proves it. Exactly one feeding per meal, and a leaderboard shows who's doing their share. |
+| **Families with kids and teens** | Pocket money feels like free money, and "do your chores" is a daily fight. | Kids earn small amounts for real responsibilities (feed the dog, water the garden) from the buddy itself. That's the original idea of a *gullak*: small coins, earned and saved, become something big. **Today** a parent's PayPal receives the payouts on the child's behalf, because PayPal accounts are 18+. **Next:** PayPal Payouts can already send to **Venmo**, and Venmo offers parent-managed **Teen Accounts (ages 13–17)**, a natural path to paying teens directly. |
+| **Pet owners who travel** | Paying a neighbour to feed the cat means trusting they actually came, twice a day. | Every visit is a verified video, and payment happens per visit, automatically, through PayPal. Peace of mind for owners, instant pay for sitters. |
+| **People who care about each other's habits** | "Drink some water" turns into nagging. | A partner funds a buddy that pays *you* to drink water, stretch or walk the dog. Care becomes encouragement, not reminders. |
+| **Neighbours, offices and community gardens** | Shared plants die because they're everyone's job and nobody's. | Anyone nearby can claim a bounty. The owner funds it, the plant pays whoever turns up. |
+
+---
+
 ## ✅ Hackathon requirements: where each is met
 
 | Requirement | How Gullak meets it | Where to look |
@@ -47,7 +59,7 @@ Neither half works alone:
 | **Meaningful AI** | AI **decides whether money moves**: video and photo proof verification with structured JSON verdicts. It also designs each buddy from one photo, sets welfare-safe schedules, and writes all dialogue in character. | [`src/ai.js`](src/ai.js) (`verifyProof`, `designBuddy`, `bountyMessage`, `buddyChat`) |
 | **Working prototype** | Live Telegram bot + hosted dashboard. Real sandbox payouts received (screenshot below). | [Try it](#-try-it-in-60-seconds), [Evidence](#-evidence-it-works) |
 | **Documentation** | This README, setup steps, architecture, commands, decision policy. | You're reading it |
-| **Tools disclosed** | Meta Model API (`muse-spark-1.3`), PayPal REST APIs, Telegram Bot API, Railway. | [Tools used](#-tools-used-and-how) |
+| **Tools disclosed** | Meta Model API (`muse-spark-1.3`), Google Gemini API (backup), PayPal REST APIs, Telegram Bot API, Railway. | [Tools used](#-tools-used-and-how) |
 | **Open source** | MIT license, full source, `.env.example`, no secrets committed. | [`LICENSE`](LICENSE) |
 
 ---
@@ -119,9 +131,13 @@ sequenceDiagram
 
 ---
 
-## 🧠 AI in depth (Meta Model API, `muse-spark-1.3`)
+## 🧠 AI in depth (Meta Model API, `muse-spark-1.3`, with Google Gemini as backup)
 
 Gullak calls Meta's OpenAI-compatible **Responses API** with **JSON-schema structured output** (with a fallback to plain JSON prompting if the schema is refused).
+
+**Backup provider: Google Gemini.** On startup Gullak asks Meta which models its key can use from that server. If Muse Spark isn't available there, or a Meta call fails, the same requests (photos, inline round videos, JSON verdicts) go to **Google Gemini** instead ([`src/gemini.js`](src/gemini.js), native REST API, no extra dependencies). It defaults to `gemini-3.5-flash` for speed and reliability, and walks through newer Flash models if one is busy, retired or over quota, re-trying the preferred one every 10 minutes. Quick tasks (bounty posts, chat) use low thinking; proof checks keep full reasoning. The decision policy below is identical whichever model answers. `AI_PROVIDER=auto|meta|gemini` forces a choice; the default `auto` means Meta first, Gemini as backup.
+
+> The hosted bot on Railway currently runs on **Gemini**: Meta's API returns no models for our key from Railway's servers, while the same key works from our local machine.
 
 | AI role | Input | Output | Why it matters |
 |---|---|---|---|
@@ -174,7 +190,7 @@ Real sandbox Payouts received by a helper's PayPal account after AI-verified pro
 
 ![Sandbox PayPal account showing two received Gullak payouts](docs/paypal-sandbox-payouts.png)
 
-Everything else is reproducible: run `/demo` with the live bot, or `npm run check` locally, which tests the Telegram, PayPal and Meta connections in one go.
+Everything else is reproducible: run `/demo` with the live bot, or `npm run check` locally, which tests the Telegram, PayPal and AI connections in one go.
 
 ---
 
@@ -204,13 +220,13 @@ Also try sending an unrelated photo (rejected in character), re-sending the same
 | `/buddies`, `/wallet` | Buddies, balances, moods, schedules |
 | `/leaderboard`, `/history`, `/me` | Who earned what, recent PayPal transactions |
 | `/pause name`, `/resume name` | Holiday mode |
-| `/status` | Live check of the PayPal and Meta AI connections |
+| `/status` | Live check of the PayPal and AI connections (shows which model is answering) |
 
 ---
 
 ## 🛠 Run it yourself
 
-**You need:** Node.js 20+, a Telegram bot token from @BotFather, a PayPal **sandbox** app (developer.paypal.com) with **Payouts enabled** under Features, and a **Meta Model API** key (dev.meta.ai).
+**You need:** Node.js 20+, a Telegram bot token from @BotFather, a PayPal **sandbox** app (developer.paypal.com) with **Payouts enabled** under Features, and a **Meta Model API** key (dev.meta.ai) and/or a **Google Gemini API** key (aistudio.google.com). With both, Meta is used first and Gemini is the backup.
 
 ```bash
 git clone https://github.com/50ur48h/Gullak.git
@@ -218,7 +234,8 @@ cd Gullak
 npm install
 cp .env.example .env      # Windows: copy .env.example .env
 # fill in TELEGRAM_BOT_TOKEN, PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, META_API_KEY
-npm run check             # ✅/❌ for Telegram, PayPal and Meta AI
+# optional backup AI: GEMINI_API_KEY (and AI_PROVIDER=auto|meta|gemini, default auto)
+npm run check             # ✅/❌ for Telegram, PayPal and the AI (shows which model answers)
 npm start                 # bot + dashboard on http://localhost:3000
 ```
 
@@ -229,7 +246,7 @@ In @BotFather → Bot Settings → **Group Privacy → Turn off**, so the bot ca
 ### Deploy on Railway (how the live version runs)
 
 1. **New Project → Deploy from GitHub repo**. Railway detects Node and runs `npm start`.
-2. **Variables:** `TELEGRAM_BOT_TOKEN`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `META_API_KEY`, `PAYPAL_ENV=sandbox`, `TZ=Asia/Singapore`, `DATA_FILE=/data/db.json`.
+2. **Variables:** `TELEGRAM_BOT_TOKEN`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `META_API_KEY`, `GEMINI_API_KEY`, `PAYPAL_ENV=sandbox`, `TZ=Asia/Singapore`, `DATA_FILE=/data/db.json`.
 3. **Attach a Volume** at `/data`, so buddies, wallets and the ledger survive redeploys.
 4. **Settings → Networking → Generate Domain**, then set `PUBLIC_URL` to that URL (used for PayPal return pages and the dashboard).
 5. Optional: add `https://<your-domain>/paypal/webhook` as a webhook in your PayPal app (*Checkout order approved*, *Payouts item* events) and set `PAYPAL_WEBHOOK_ID`.
@@ -247,6 +264,7 @@ Run only **one** instance per bot token. Telegram allows a single long-polling c
 | **PayPal Webhooks** | `CHECKOUT.ORDER.APPROVED`, `PAYMENT.PAYOUTS-ITEM.*`, signature-verified |
 | **PayPal Sandbox** | Business account = House Bank, personal accounts = helpers |
 | **Meta Model API: Muse Spark 1.3** (`muse-spark-1.3`) | Video and image understanding for proof verification (structured JSON verdicts), buddy design from a photo, in-character dialogue. Used through the OpenAI-compatible Responses API. |
+| **Google Gemini API** (`gemini-3.5-flash`, newer Flash models as fallbacks) | Backup AI provider for the same jobs, used automatically when Muse Spark isn't reachable (it runs the hosted Railway bot). Native `generateContent` REST API with inline images and video. |
 | **Telegram Bot API** via [grammY](https://grammy.dev) | Group-chat UX, live round-video proofs, inline buttons |
 | **Express** | Live dashboard, PayPal return pages, webhook endpoint |
 | **Railway** | Hosting (always-on service + persistent volume) |
@@ -260,6 +278,7 @@ src/
   bot.js        Telegram commands, buttons, media handlers
   game.js       bounties, claims, proof → verdict → payout policy, top-ups, ledger
   ai.js         Meta Muse Spark: verifyProof, designBuddy, bountyMessage, buddyChat
+  gemini.js     Google Gemini backup provider (same requests, model fallback chain)
   paypal.js     OAuth, Payouts, Orders v2, webhook signature verification
   meals.js      timezone-aware meal slots (±15 min, once per meal)
   scheduler.js  random bounties, meal bounties, claim expiry, surge pricing
@@ -283,6 +302,7 @@ docs/              screenshots
 - Spoken code-word challenges using Muse Spark's audio understanding
 - Smart-plug and soil-sensor triggers ("I'm dry" from a real moisture reading)
 - Neighbour pet-sitting while you travel, paid per verified visit
+- **Family mode:** payouts to parent-managed Venmo Teen Accounts (PayPal Payouts already supports Venmo as a recipient in the US), plus a savings-goal view so kids watch their gullak fill up
 - Shared household pots and PayPal Subscriptions for recurring wallet allowances
 
 ## License
