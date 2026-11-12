@@ -26,6 +26,28 @@ export async function checkModel() {
   }
 }
 
+// Meta sometimes answers 404 model_not_found for a model it lists (seen intermittently from Railway's servers).
+// Retry once, then fall back to the other Muse Spark versions this key can use.
+const FALLBACK_MODELS = ['muse-spark-1.3', 'muse-spark-1.2', 'muse-spark-1.1'];
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function respond(params) {
+  const models = [config.meta.model, ...FALLBACK_MODELS.filter((m) => m !== config.meta.model)];
+  let lastErr;
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await client.responses.create({ ...params, model });
+      } catch (err) {
+        if (err.status !== 404 || (err.code && err.code !== 'model_not_found')) throw err;
+        lastErr = err;
+        console.warn(`[ai] ${model}: 404 model_not_found (attempt ${attempt}), retrying`);
+        await sleep(1000 * attempt);
+      }
+    }
+  }
+  throw lastErr;
+}
+
 const dataUrl = (buffer, mime) => `data:${mime};base64,${buffer.toString('base64')}`;
 
 // Muse Spark is a reasoning model: reasoning tokens count against max_output_tokens,
@@ -65,8 +87,7 @@ async function askJson({ system, content, schemaName, schema, maxTokens = 6000, 
   ];
   const reasoning = effort ? { reasoning: { effort } } : {};
   try {
-    const res = await client.responses.create({
-      model: config.meta.model,
+    const res = await respond({
       input,
       max_output_tokens: maxTokens,
       ...reasoning,
@@ -74,11 +95,10 @@ async function askJson({ system, content, schemaName, schema, maxTokens = 6000, 
     });
     return extractJson(textOf(res));
   } catch (err) {
-    if (err.status && err.status >= 500) throw err;
+    if (err.status && (err.status >= 500 || err.status === 404)) throw err;
     console.warn(`[ai] ${schemaName}: structured output failed (${err.message}); retrying with plain JSON prompt`);
     // Retry without structured output, asking for raw JSON instead.
-    const res = await client.responses.create({
-      model: config.meta.model,
+    const res = await respond({
       input: [
         { role: 'system', content: `${system}\n\nReply with ONLY a JSON object matching this JSON Schema, no prose:\n${JSON.stringify(schema)}` },
         { type: 'message', role: 'user', content },
@@ -279,8 +299,7 @@ export async function buddyChat(buddy, { userName, text, walletCents }) {
 }
 
 export async function ping() {
-  const res = await client.responses.create({
-    model: config.meta.model,
+  const res = await respond({
     input: 'Reply with the single word: ok',
     max_output_tokens: 2000,
     reasoning: { effort: 'minimal' },
