@@ -66,8 +66,13 @@ export function createBot() {
 
   // ---------------------------------------------------------------- buddy creation
   bot.command('newbuddy', async (ctx) => {
-    db().pending[ctx.user.id] = { type: 'newbuddy', chatId: String(ctx.chat.id) };
+    // Text after the command ("/newbuddy Ori our cat, feed her at 8am…") is used if the photo has no caption.
+    const description = String(ctx.match || '').trim();
+    db().pending[ctx.user.id] = { type: 'newbuddy', chatId: String(ctx.chat.id), description };
     save();
+    if (description) {
+      return ctx.reply(`📸 Got the description. Now send me a <b>photo</b> of it.`, HTML);
+    }
     await ctx.reply(
       '📸 Send me a <b>photo</b> of your plant / pet / thing, with a caption describing it.\n\n' +
         'Example: <i>“Fernanda, my dramatic fern. Needs water every 3 days. $0.50 per watering.”</i>\n' +
@@ -300,7 +305,7 @@ export function createBot() {
       return ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
     }
     if (ctx.match[1] === 'redo') {
-      db().pending[ctx.user.id] = { type: 'newbuddy', chatId: p.chatId };
+      db().pending[ctx.user.id] = { type: 'newbuddy', chatId: p.chatId, description: p.description || '' };
       save();
       return ctx.reply('OK, send the photo again with a different description.');
     }
@@ -319,7 +324,7 @@ export function createBot() {
   bot.on('message:photo', async (ctx) => {
     const photo = ctx.msg.photo.at(-1);
     const p = db().pending[ctx.user.id];
-    if (p && p.chatId === String(ctx.chat.id) && p.type === 'newbuddy') return designFromPhoto(ctx, photo.file_id);
+    if (p && p.chatId === String(ctx.chat.id) && p.type === 'newbuddy') return designFromPhoto(ctx, photo.file_id, p.description);
     if (p && p.chatId === String(ctx.chat.id) && p.type === 'addphoto') {
       const buddy = db().buddies[p.buddyId];
       buddy.refPhotoIds = [...(buddy.refPhotoIds || []), photo.file_id].slice(-3);
@@ -354,14 +359,14 @@ export function createBot() {
     save();
   });
 
-  async function designFromPhoto(ctx, photoId) {
+  async function designFromPhoto(ctx, photoId, description = '') {
     const status = await ctx.reply('🧠 Designing your buddy…');
     try {
       const file = await ctx.api.getFile(photoId);
       const res = await fetch(`https://api.telegram.org/file/bot${config.telegramToken}/${file.file_path}`);
       const photo = Buffer.from(await res.arrayBuffer());
-      const design = await ai.designBuddy({ photo, caption: ctx.msg.caption || '' });
-      db().pending[ctx.user.id] = { type: 'confirm-buddy', chatId: String(ctx.chat.id), design, photoId };
+      const design = await ai.designBuddy({ photo, caption: [description, ctx.msg.caption].filter(Boolean).join('. ') });
+      db().pending[ctx.user.id] = { type: 'confirm-buddy', chatId: String(ctx.chat.id), design, photoId, description };
       save();
       const kb = new InlineKeyboard().text('✅ Create', 'nb:ok').text('🔁 Redo', 'nb:redo').text('❌ Cancel', 'nb:cancel');
       await ctx.api.editMessageText(
